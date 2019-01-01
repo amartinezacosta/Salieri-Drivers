@@ -20,6 +20,11 @@ uint32_t UART_TXReadIndex[UART_MODULE_COUNT] = {0};
 #define UART_RX_FULL(B)                 (UART_RXWriteIndex[B] + 1) % UART_RX_BUFFER_SIZE == UART_RXReadIndex[B] ? true : false
 #define UART_RX_EMPTY(B)                UART_RXReadIndex[B] == UART_RXWriteIndex[B] ? true : false
 
+uint32_t UART_MapModule[UART_MODULE_COUNT] = {EUSCI_A0_BASE, EUSCI_A1_BASE, EUSCI_A2_BASE, EUSCI_A3_BASE};
+uint32_t UART_MapInterrupt[UART_MODULE_COUNT] = {INT_EUSCIA0, INT_EUSCIA1, INT_EUSCIA2, INT_EUSCIA3};
+uint32_t UART_MapPort[UART_MODULE_COUNT] = {GPIO_PORT_P1, GPIO_PORT_P2, GPIO_PORT_P3, GPIO_PORT_P9};
+uint32_t UART_MapPins[UART_MODULE_COUNT] = {GPIO_PIN2|GPIO_PIN3, GPIO_PIN2|GPIO_PIN3, GPIO_PIN2|GPIO_PIN3, GPIO_PIN7|GPIO_PIN6};
+
 /*TODO: make this a local instead of a global?*/
 /*Default baud rate is 115200 @ 48MHz*/
 eUSCI_UART_Config UARTConfigs[UART_MODULE_COUNT] =
@@ -36,106 +41,39 @@ eUSCI_UART_Config UARTConfigs[UART_MODULE_COUNT] =
 };
 
 
-uint32_t UART_ModuleMap(uint32_t uart)
-{
-    switch(uart)
-    {
-    case EUSCI_A0_BASE:
-        return 0;
-    case EUSCI_A1_BASE:
-        return 1;
-    case EUSCI_A2_BASE:
-        return 2;
-    case EUSCI_A3_BASE:
-        return 3;
-    default:
-        return 0;
-    }
-}
-
-uint32_t UART_ModuleInterruptMap(uint32_t uart)
-{
-    switch(uart)
-    {
-    case EUSCI_A0_BASE:
-        return INT_EUSCIA0;
-    case EUSCI_A1_BASE:
-        return INT_EUSCIA1;
-    case EUSCI_A2_BASE:
-        return INT_EUSCIA2;
-    case EUSCI_A3_BASE:
-        return INT_EUSCIA3;
-    default:
-        return 0;
-    }
-}
-
-uint32_t UART_ModuleMapPort(uint32_t uart)
-{
-    switch(uart)
-    {
-    case EUSCI_A0_BASE:
-        return GPIO_PORT_P1;
-    case EUSCI_A1_BASE:
-        return GPIO_PORT_P2;
-    case EUSCI_A2_BASE:
-        return GPIO_PORT_P3;
-    case EUSCI_A3_BASE:
-        return GPIO_PORT_P9;
-    default:
-        return 0;
-    }
-}
-
-uint8_t UART_ModuleMapPins(uint32_t uart)
-{
-    switch(uart)
-    {
-    case EUSCI_A0_BASE:
-        return GPIO_PIN2 | GPIO_PIN3;
-    case EUSCI_A1_BASE:
-        return GPIO_PIN2 | GPIO_PIN3;
-    case EUSCI_A2_BASE:
-        return GPIO_PIN2 | GPIO_PIN3;
-    case EUSCI_A3_BASE:
-        return GPIO_PIN7 | GPIO_PIN6;
-    default:
-        return 0;
-    }
-}
-
 void UART_Open(uint32_t uart)
 {
-    uint32_t index = UART_ModuleMap(uart);
+    uint32_t module = UART_MapModule[uart];
+    uint32_t port = UART_MapPort[uart];
+    uint32_t pins = UART_MapPins[uart];
+    uint32_t interr = UART_MapInterrupt[uart];
 
-    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(UART_ModuleMapPort(uart), UART_ModuleMapPins(uart), GPIO_PRIMARY_MODULE_FUNCTION);
-    MAP_UART_initModule(uart, &UARTConfigs[index]);
-    MAP_UART_enableModule(uart);
-    MAP_UART_enableInterrupt(uart, EUSCI_A_UART_RECEIVE_INTERRUPT);
-    MAP_Interrupt_enableInterrupt(UART_ModuleInterruptMap(uart));
+    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(port, pins, GPIO_PRIMARY_MODULE_FUNCTION);
+    MAP_UART_initModule(module, &UARTConfigs[uart]);
+    MAP_UART_enableModule(module);
+    MAP_UART_enableInterrupt(module, EUSCI_A_UART_RECEIVE_INTERRUPT);
+    MAP_Interrupt_enableInterrupt(interr);
 }
 
 void UART_ChangeSettings(uint32_t uart, eUSCI_UART_Config *config)
 {
-     uint32_t index = UART_ModuleMap(uart);
-    UARTConfigs[index] = *config;
+    uint32_t module = UART_MapModule[uart];
+    UARTConfigs[uart] = *config;
 
-    MAP_UART_disableModule(uart);
-    MAP_UART_initModule(uart, &UARTConfigs[index]);
-    MAP_UART_enableModule(uart);
+    MAP_UART_disableModule(module);
+    MAP_UART_initModule(module, &UARTConfigs[uart]);
+    MAP_UART_enableModule(module);
 }
 
 void UART_SetCallback(uint32_t uart, void(*callback)(uint32_t))
 {
-    uint32_t index = UART_ModuleMap(uart);
-
-    UART_Callbacks[index] = callback;
+    UART_Callbacks[uart] = callback;
 }
 
 uint32_t UART_Write(uint32_t uart, uint8_t *data, uint32_t size)
 {
     uint32_t i;
-    uint32_t module = UART_ModuleMap(uart);
+    uint32_t module = UART_MapModule[uart];
 
     if(size > UART_TX_BUFFER_SIZE)
     {
@@ -144,16 +82,16 @@ uint32_t UART_Write(uint32_t uart, uint8_t *data, uint32_t size)
 
     for(i = 0; i < size; i++)
     {
-        if(UART_TX_FULL(module))
+        if(UART_TX_FULL(uart))
         {
             break;
         }
 
-        UART_TXBuffer[module][UART_TXWriteIndex[module]] = data[i];
-        ADVANCE_TX_WRITE_INDEX(module);
+        UART_TXBuffer[uart][UART_TXWriteIndex[uart]] = data[i];
+        ADVANCE_TX_WRITE_INDEX(uart);
     }
 
-    MAP_UART_enableInterrupt(uart, EUSCI_A_UART_TRANSMIT_INTERRUPT);
+    MAP_UART_enableInterrupt(module, EUSCI_A_UART_TRANSMIT_INTERRUPT);
 
     return i;
 }
@@ -161,7 +99,6 @@ uint32_t UART_Write(uint32_t uart, uint8_t *data, uint32_t size)
 uint32_t UART_Read(uint32_t uart, uint8_t *data, uint32_t size)
 {
     uint32_t i;
-    uint32_t module = UART_ModuleMap(uart);
 
     if(size > UART_RX_BUFFER_SIZE)
     {
@@ -170,13 +107,13 @@ uint32_t UART_Read(uint32_t uart, uint8_t *data, uint32_t size)
 
     for(i = 0; i < size; i++)
     {
-        if(UART_RX_EMPTY(module))
+        if(UART_RX_EMPTY(uart))
         {
             break;
         }
 
-        data[i] = UART_RXBuffer[module][UART_RXReadIndex[module]];
-        ADVANCE_RX_READ_INDEX(module);
+        data[i] = UART_RXBuffer[uart][UART_RXReadIndex[uart]];
+        ADVANCE_RX_READ_INDEX(uart);
     }
 
     return i;

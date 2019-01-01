@@ -12,6 +12,11 @@
 #define TX_BUFFER_EMPTY_MSG     2
 #define RX_BUFFER_EMPTY_MSG     3
 
+#define UART0   0
+#define UART1   1
+#define UART2   2
+#define UART3   3
+
 void UART_Open(uint32_t uart);
 void UART_ChangeSettings(uint32_t uart, eUSCI_UART_Config *config);
 void UART_SetCallback(uint32_t uart, void(*callback)(uint32_t));

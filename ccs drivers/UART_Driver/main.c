@@ -17,19 +17,19 @@ void UART_A0Callback(uint32_t msg)
 
 void main(void)
 {
-    UART_Open(EUSCI_A0_BASE);
-    UART_SetCallback(EUSCI_A0_BASE, UART_A0Callback);
+    UART_Open(UART0);
+    UART_SetCallback(UART0, UART_A0Callback);
 
     char input[64];
     uint32_t read;
 
     while(1)
     {
-        read = UART_Read(EUSCI_A0_BASE, (uint8_t*)input, 64);
+        read = UART_Read(UART0, (uint8_t*)input, 64);
 
         if(read > 0)
         {
-            UART_Write(EUSCI_A0_BASE, (uint8_t*)input, read);
+            UART_Write(UART0, (uint8_t*)input, read);
         }
     }
 }
